@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OrbitControls } from "OrbitControls";
-import { RoundedBoxGeometry } from "https://unpkg.com/three@0.138.0/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 document.addEventListener("DOMContentLoaded", function () {
   const scene = new THREE.Scene();
@@ -131,13 +130,10 @@ document.addEventListener("DOMContentLoaded", function () {
     color: 0xb4b4b4,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.3,
+    roughness: 0.3,
+    metalness: 0.3,
   });
-
-  function createBoxGeometry(d) {
-    const geo = new RoundedBoxGeometry(width, height, d, segments, radius);
-    return geo;
-  }
 
   const cubesGroup = new THREE.Group();
   scene.add(cubesGroup);
@@ -147,6 +143,118 @@ document.addEventListener("DOMContentLoaded", function () {
   let depth = 10;
   const radius = 5;
   const segments = 32;
+
+  function RoundedBoxFlat(w, h, d, r, s) {
+    const pi2 = Math.PI * 2;
+    const n = (s + 1) * 4;
+
+    let indices = [];
+    let positions = [];
+    let uvs = [];
+
+    makeFronts(n, 1, 0);
+    makeFronts(n, -1, n + 1);
+
+    makeFrame(n, 2 * n + 2, 1, n + 2);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(positions), 3)
+    );
+    geometry.setAttribute(
+      "uv",
+      new THREE.BufferAttribute(new Float32Array(uvs), 2)
+    );
+
+    const vtc = n * 3;
+    geometry.addGroup(0, vtc, 4);
+    geometry.addGroup(vtc, vtc, 5);
+    geometry.addGroup(2 * vtc, 2 * vtc + 3, 0);
+
+    geometry.computeVertexNormals();
+
+    return geometry;
+
+    function makeFronts(n, side, idx) {
+      const d0 = side === 1 ? 0 : 1;
+      const d1 = side === 1 ? 1 : 0;
+
+      for (let j = 1; j < n; j++) {
+        indices.push(idx, idx + d0 + j, idx + d1 + j);
+      }
+
+      const d2 = side === 1 ? n : 1;
+      const d3 = side === 1 ? 1 : n;
+
+      indices.push(idx, idx + d2, idx + d3);
+
+      positions.push(0, 0, (side * d) / 2);
+      uvs.push(0.5, 0.5);
+
+      for (let j = 0; j < n; j++) {
+        const qu = Math.trunc((4 * j) / n) + 1;
+        const sgn = qu === 1 || qu === 4 ? 1 : -1;
+
+        const c = {
+          x: sgn * (w / 2 - r),
+          y: (qu < 3 ? 1 : -1) * (h / 2 - r),
+          z: (side * d) / 2,
+        };
+
+        const x = c.x + r * Math.cos((pi2 * (j - qu + 1)) / (n - 4));
+        const y = c.y + r * Math.sin((pi2 * (j - qu + 1)) / (n - 4));
+        const z = c.z;
+        positions.push(x, y, z);
+
+        const u0 = side === 1 ? 0 : 1;
+        uvs.push(u0 + side * (0.5 + x / w), 0.5 + y / h);
+      }
+    }
+
+    function makeFrame(n, sidx, sif, sib) {
+      let a, b, c, d, xf, yf, zf, xb, yb, zb;
+      const pif = sif * 3;
+      const pib = sib * 3;
+      let st = [];
+
+      let idx = sidx;
+
+      for (let j = 0; j < n; j++) {
+        a = idx;
+        b = idx + 1;
+        c = idx + 2;
+        d = idx + 3;
+
+        indices.push(a, b, d, a, d, c);
+
+        idx += 2;
+      }
+
+      for (let j = 0; j < n; j++) {
+        const j3 = j * 3;
+
+        xf = positions[pif + j3];
+        yf = positions[pif + j3 + 1];
+        zf = positions[pif + j3 + 2];
+
+        xb = positions[pib + j3];
+        yb = positions[pib + j3 + 1];
+        zb = positions[pib + j3 + 2];
+
+        positions.push(xf, yf, zf, xb, yb, zb);
+
+        if (j === 0) st = [xf, yf, zf, xb, yb, zb];
+
+        const v = j / n;
+        uvs.push(0, v, 1, v);
+      }
+
+      positions.push(st[0], st[1], st[2], st[3], st[4], st[5]);
+      uvs.push(0, 1, 1, 1);
+    }
+  }
 
   function createCubes(frontTextures, backTextures) {
     if (frontTextures.length !== backTextures.length) {
@@ -166,7 +274,7 @@ document.addEventListener("DOMContentLoaded", function () {
           map: frontTextures[i],
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: 0.9,
+          opacity: 0,
         }),
         new THREE.MeshStandardMaterial({
           map: backTextures[i],
@@ -180,7 +288,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     for (let i = 0; i < numCubes; i++) {
-      const geometry = createBoxGeometry(depth);
+      const geometry = RoundedBoxFlat(width, height, depth, radius, segments);
       const cube = new THREE.Mesh(geometry, cubeMaterialsArray[i]);
 
       const angle = i * angleStep;
@@ -196,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
+  controls.dampingFactor = 0.12;
 
   controls.minPolarAngle = polarAngle;
   controls.maxPolarAngle = polarAngle;
@@ -216,14 +324,12 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   let rotationAngle = 0;
-  const rotationSpeed = 0.06;
+  const rotationSpeed = 0.12;
   let isDragging = false;
   let previousX;
   let slideWidth = window.innerWidth;
   let rotationDirection = 1;
   const delay = 120;
-
-  let isUserInteracting = false;
 
   function normalizeAngle(angle) {
     return ((angle % 360) + 360) % 360;
@@ -252,11 +358,6 @@ document.addEventListener("DOMContentLoaded", function () {
       rotationAngle = normalizeAngle(rotationAngle);
 
       cubesGroup.rotation.y = THREE.MathUtils.degToRad(rotationAngle);
-
-      buttons.forEach((btn) => btn.classList.remove("active"));
-      buttons[index].classList.add("active");
-
-      applyFastClick(buttons[index]);
     }
   }
 
@@ -274,7 +375,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const onMouseDown = (e) => {
     if (e.button === 0) {
       isDragging = true;
-      isUserInteracting = true;
+
       previousX = e.clientX;
       e.preventDefault();
     }
@@ -288,7 +389,6 @@ document.addEventListener("DOMContentLoaded", function () {
       if (Math.abs(diff) > threshold) {
         const newDirection = diff > 0 ? 1 : -1;
         rotationDirection = newDirection;
-        console.log(`Dragging. diff: ${diff}, newDirection: ${newDirection}`);
 
         rotationAngle += rotationSpeed * rotationDirection;
 
@@ -305,9 +405,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const onMouseUpOrLeave = () => {
     isDragging = false;
-    setTimeout(() => {
-      isUserInteracting = false;
-    }, 1000);
+    setTimeout(() => {}, 1000);
   };
 
   function updateSlideStyles() {
@@ -322,6 +420,10 @@ document.addEventListener("DOMContentLoaded", function () {
         Math.abs(angle) > 180 ? 360 - Math.abs(angle) : Math.abs(angle);
 
       const cuboid = cubesGroup.children[i];
+      if (!cuboid) {
+        continue;
+      }
+
       const frontMaterial = cuboid.material[4];
       if (frontMaterial) {
         frontMaterial.opacity = Math.max(0.9 - angleDiff / 180, 0.4);
@@ -332,11 +434,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function animate() {
     requestAnimationFrame(animate);
-
-    if (!isUserInteracting) {
-      rotationAngle += rotationSpeed * rotationDirection;
-    }
-
+    rotationAngle += rotationSpeed * rotationDirection;
     rotationAngle = normalizeAngle(rotationAngle);
     cubesGroup.rotation.y = THREE.MathUtils.degToRad(rotationAngle);
 
