@@ -35,12 +35,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "310px";
   renderer.domElement.style.background = "transparent";
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(window.devicePixelRatio * 4);
 
   function resizeRenderer() {
     const cw = 705;
     const ch = 310;
     renderer.setSize(cw, ch, false);
+    renderer.setPixelRatio(window.devicePixelRatio * 4);
     camera.aspect = cw / ch;
     camera.updateProjectionMatrix();
   }
