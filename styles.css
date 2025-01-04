@@ -35,9 +35,11 @@ a:hover {
   text-decoration: none;
 }
 .threejs-slider {
-  max-width: 705px;
+  max-width: 750px;
   width: 100%;
-  margin: 0 auto;
+  height: 310px;
+  margin: 25px auto;
+
   cursor: pointer;
 }
 
@@ -56,7 +58,7 @@ main {
   display: block;
 }
 .heading {
-  margin: 75px auto 10px;
+  margin: 55px auto 10px;
   width: fit-content;
   font-weight: 400;
   font-size: 40px;

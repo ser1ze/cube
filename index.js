@@ -2,32 +2,30 @@ import * as THREE from "three";
 import { OrbitControls } from "OrbitControls";
 
 document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("threejs-slider");
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
+  const cssPerspective = 800;
+
+  const fov =
+    2 * Math.atan(containerHeight / (2 * cssPerspective)) * (180 / Math.PI);
+  const aspect = containerWidth / containerHeight;
+  const near = 1;
+  const far = 2000;
+
+  const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+
+  const perspectiveOriginY = 0.1 * containerHeight;
+  camera.position.set(0, perspectiveOriginY, cssPerspective);
+  camera.lookAt(0, 0, 0);
+
   const scene = new THREE.Scene();
   scene.background = null;
-  const numCubes = 8;
-  const cubeWidth = 336;
-  const height = 210;
-  const depth = 3;
-  const radius = 6;
-  const segments = 32;
-  const angleStep = (2 * Math.PI) / numCubes;
-  const chordLength = cubeWidth - 20;
-  const octagonRadius =
-    (chordLength / (2 * Math.sin(Math.PI / numCubes))) * 1.05;
-
-  const camera = new THREE.PerspectiveCamera(
-    13,
-    window.innerWidth / window.innerHeight,
-    1,
-    4000
-  );
-  camera.position.set(0, 0, 1950);
-  camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
-  const container = document.getElementById("threejs-slider");
   container.appendChild(renderer.domElement);
+
   renderer.domElement.style.display = "flex";
   renderer.domElement.style.position = "relative";
   renderer.domElement.style.margin = "0 auto";
@@ -35,14 +33,17 @@ document.addEventListener("DOMContentLoaded", () => {
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "310px";
   renderer.domElement.style.background = "transparent";
-  renderer.setPixelRatio(window.devicePixelRatio * 4);
 
   function resizeRenderer() {
-    const cw = 705;
-    const ch = 310;
-    renderer.setSize(cw, ch, false);
-    renderer.setPixelRatio(window.devicePixelRatio * 4);
-    camera.aspect = cw / ch;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const pixelRatio = Math.min(window.devicePixelRatio * 4, 2);
+
+    renderer.setSize(width * pixelRatio, height * pixelRatio, false);
+    renderer.setPixelRatio(pixelRatio);
+
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
   }
   resizeRenderer();
@@ -50,27 +51,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
+
   const pointLight1 = new THREE.PointLight(0xffffff, 0.5, 2000);
   pointLight1.position.set(500, 500, 500);
   scene.add(pointLight1);
+
   const pointLight2 = new THREE.PointLight(0xffffff, 0.5, 2000);
   pointLight2.position.set(-500, -500, -500);
   scene.add(pointLight2);
 
   const textureLoader = new THREE.TextureLoader();
-
-  function mirrorTexture(texture) {
-    if (!texture.image) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = texture.image.width;
-    canvas.height = texture.image.height;
-    const ctx = canvas.getContext("2d");
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(texture.image, 0, 0);
-    texture.image = canvas;
-    texture.needsUpdate = true;
-  }
 
   function loadTexture(path) {
     return new Promise((resolve, reject) => {
@@ -101,12 +91,21 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   let cumulativeRotation = 0;
+  const numCubes = 8;
+  const cubeWidth = 326;
+  const height = 210;
+  const depth = 4.5;
+  const radius = 6;
+  const segments = 32;
+  const angleStep = (2 * Math.PI) / numCubes;
+  const chordLength = cubeWidth - 10;
+  const octagonRadius = chordLength / (2 * Math.sin(Math.PI / numCubes));
 
   Promise.all([...frontPaths.map(loadTexture), ...backPaths.map(loadTexture)])
     .then((textures) => {
       const front = textures.slice(0, frontPaths.length);
       const back = textures.slice(frontPaths.length);
-      back.forEach(mirrorTexture);
+
       makeCubes(front, back);
       goToSlide(0);
       cumulativeRotation = -90;
@@ -116,7 +115,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
   const group = new THREE.Group();
-  group.position.set(0, 260, 0);
+  const verticalOffset = 20;
+  group.position.set(0, 220 + verticalOffset, 0);
+
+  const baseScale = 0.73;
+  let interactionScale = 1;
+
+  group.scale.setScalar(baseScale * interactionScale);
   scene.add(group);
 
   function RoundedBoxFlat(w, h, d, r, s) {
@@ -236,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
       });
+
       const geometry = RoundedBoxFlat(
         cubeWidth,
         height,
@@ -243,6 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         radius,
         segments
       );
+
       const mesh = new THREE.Mesh(geometry, [
         semiMat,
         semiMat,
@@ -301,7 +308,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
+  const mouseVector = new THREE.Vector2();
 
   function normalizeAngle(a) {
     return ((a % 360) + 360) % 360;
@@ -331,16 +338,19 @@ document.addEventListener("DOMContentLoaded", () => {
     el.classList.remove("slide-left");
     el.classList.add("slide-in");
     el.style.display = "block";
+
     const currentDeg = cumulativeRotation;
     const step = 360 / numCubes;
     const offset = -90;
     const desired = offset - step * index;
     const diff = getShortestAngleDiff(currentDeg, desired);
+
     rotationDirection = diff >= 0 ? 1 : -1;
     endRotationAngle = currentDeg + diff;
     startRotationAngle = currentDeg;
     transitionStartTime = performance.now();
     isAnimatingToTarget = true;
+
     btns.forEach((b) => b.classList.remove("active"));
     btns[index].classList.add("active");
   }
@@ -373,9 +383,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let scaleDuration = 200;
   let isScaling = false;
 
-  function animateScale(to) {
-    scaleFrom = group.scale.x;
-    scaleToValue = to;
+  function animateScale(toMultiplier) {
+    scaleFrom = interactionScale;
+    scaleToValue = toMultiplier;
     scaleStartTime = performance.now();
     isScaling = true;
   }
@@ -403,17 +413,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (moveAccumulator >= rotationThreshold) {
       const newDirection = diff > 0 ? 1 : -1;
       rotationDirection = newDirection;
-      const dragSpeedFactor = 0.1 * velocityFactor;
+      const dragSpeedFactor = 2 * velocityFactor;
       rotationVelocity += absDiff * dragSpeedFactor * rotationDirection;
       rotationVelocity = Math.min(
         Math.max(rotationVelocity, -maxSpeed),
         maxSpeed
       );
-      moveAccumulator = 0;
+      moveAccumulator = 4;
       previousX = e.clientX;
       didDrag = true;
     }
   }
+
   function onMouseUpOrLeave() {
     isDragging = false;
     animateScale(1);
@@ -452,9 +463,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
+    mouseVector.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseVector.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouseVector, camera);
     const intersects = raycaster.intersectObjects(group.children, false);
 
     if (intersects.length > 0) {
@@ -474,9 +485,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function onMouseDownOnSlide(event) {
     const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
+    mouseVector.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseVector.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouseVector, camera);
     const intersects = raycaster.intersectObjects(group.children, false);
 
     if (intersects.length > 0) {
@@ -539,8 +550,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const elapsed = now - scaleStartTime;
       const t = Math.min(elapsed / scaleDuration, 1);
       const eased = easeInOutQuad(t);
-      const scaleNow = scaleFrom + (scaleToValue - scaleFrom) * eased;
-      group.scale.set(scaleNow, scaleNow, scaleNow);
+      interactionScale = scaleFrom + (scaleToValue - scaleFrom) * eased;
+      group.scale.setScalar(baseScale * interactionScale);
+
       if (t >= 1) {
         isScaling = false;
       }
